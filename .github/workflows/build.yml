@@ -24,6 +24,10 @@ jobs:
         shell: bash
       - name: Install dependencies
         run: yarn
+      - name: Set up Python deps for moments runtime
+        # build:moments-runtime 需要 PyInstaller 冻结朋友圈运行时（见 scripts/build-moments-runtime.js），
+        # PySide6 由 pyautogui 的 pygetwindow/mouseinfo 依赖带入，不进安装包，仅构建机使用
+        run: python -m pip install --upgrade pyinstaller mss numpy pyautogui pyperclip pywin32
       - name: Build Electron app (Windows)
         run: yarn build
       - name: Upload Windows artifact
