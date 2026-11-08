@@ -75,6 +75,7 @@
 const PT_ICON_STEM = {
   抖音: "dy",
   视频号: "sph",
+  朋友圈: "pyq",
   哔哩哔哩: "blbl",
   百家号: "bjh",
   头条: "tt",

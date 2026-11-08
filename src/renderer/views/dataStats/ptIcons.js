@@ -2,6 +2,7 @@
 export const PT_ICONS = {
   抖音: require("@/layout/components/Sidebar/ptcion/dy.png"),
   视频号: require("@/layout/components/Sidebar/ptcion/sph.png"),
+  朋友圈: require("@/layout/components/Sidebar/ptcion/pyq.svg"),
   哔哩哔哩: require("@/layout/components/Sidebar/ptcion/blbl.jpeg"),
   百家号: require("@/layout/components/Sidebar/ptcion/bjh.png"),
   头条: require("@/layout/components/Sidebar/ptcion/tt.png"),

@@ -285,6 +285,8 @@ export default {
 };
 </script>
 <style rel="stylesheet/scss" lang="scss" scoped>
+@import "@/styles/variables.scss";
+
 .window-title {
   width: 100%;
   height: 30px;
@@ -293,7 +295,8 @@ export default {
   -webkit-app-region: drag;
   position: fixed;
   top: 0;
-  background: linear-gradient(to right, #0c3c78, #fff);
+  // 与「账号数据」导航行（Navbar 的 $menuBg）保持同一背景色
+  background: $menuBg;
   z-index: 99999;
   .title {
     text-align: center;

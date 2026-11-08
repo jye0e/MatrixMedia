@@ -1,4 +1,4 @@
-import { dy, bjh, blbl, sph, tt, ks, xhs, juejin, fqsp } from "./upLoad";
+import { dy, bjh, blbl, sph, tt, ks, xhs, juejin, fqsp, pyq } from "./upLoad";
 import zt from "./zt";
 
 
@@ -13,6 +13,7 @@ export default {
   小红书: xhs,
   掘金: juejin,
   番茄视频: fqsp,
+  朋友圈: pyq,
   // 获取发布状态
   抖音状态: zt.dy,
   百家号状态: zt.bjh,

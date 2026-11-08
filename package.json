@@ -14,7 +14,8 @@
     "prebuild:dir": "node scripts/gen-telemetry-secret.js",
     "rm:build": "node scripts/rm-build-dir.js",
     "build:ico": "node scripts/build-ico.js",
-    "build": "yarn rm:build && yarn build:ico && yarn build:dir && electron-builder --win --x64",
+    "build:moments-runtime": "node scripts/build-moments-runtime.js",
+    "build": "yarn rm:build && yarn build:ico && yarn build:moments-runtime && yarn build:dir && electron-builder --win --x64",
     "build:mac": "yarn rm:build && yarn build:dir && electron-builder --mac --x64 --arm64",
     "build:mac:x64": "yarn rm:build && yarn build:dir && electron-builder --mac --x64",
     "build:mac:arm64": "yarn rm:build && yarn build:dir && electron-builder --mac --arm64",
@@ -107,6 +108,28 @@
       {
         "from": "lib/icons/icon.ico",
         "to": "matrixmedia.ico"
+      }
+    ],
+    "extraResources": [
+      {
+        "from": "resources/moments",
+        "to": "moments",
+        "filter": [
+          "**/*",
+          "!**/logs/**",
+          "!**/__pycache__/**",
+          "!**/*.pyc",
+          "!**/.venv/**"
+        ]
+      },
+      {
+        "from": "resources/moments-runtime",
+        "to": "moments-runtime",
+        "filter": [
+          "**/*",
+          "!**/logs/**",
+          "!**/*.pyc"
+        ]
       }
     ],
     "publish": [

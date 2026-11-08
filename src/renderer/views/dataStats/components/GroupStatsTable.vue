@@ -53,7 +53,7 @@ import { PT_ICONS } from "../ptIcons";
 import { compareGroups } from "../../../../shared/accountGroupOrder.js";
 
 /** 不参与统计的平台 */
-const EXCLUDED = new Set(["番茄视频", "掘金"]);
+const EXCLUDED = new Set(["番茄视频", "掘金", "朋友圈"]);
 
 export default {
   name: "GroupStatsTable",

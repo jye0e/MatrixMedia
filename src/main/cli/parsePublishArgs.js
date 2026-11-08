@@ -112,6 +112,13 @@ export function parsePublishArgs(subArgv) {
     return { ok: false, error: "缺少 --platform（或 -p），例如 dy / 抖音" };
   }
   const pt = resolvePublishPlatform(out.platform);
+  if (pt === "朋友圈") {
+    return {
+      ok: false,
+      error:
+        "朋友圈暂未接入 CLI 视频发布：朋友圈需要图片而非视频，请在 GUI 使用封面图发布；桌面脚本仅支持 Windows",
+    };
+  }
   if (!VIDEO_PUBLISH_CANONICAL.includes(pt)) {
     return { ok: false, error: `未知平台: ${out.platform}` };
   }

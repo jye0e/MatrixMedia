@@ -14,7 +14,9 @@
         @click="activeTab = 'docs'"
         >📋 项目文档</el-button
       >
+      <!-- 开发入口：如需恢复，把 data 里的 showDevPlatformEntry 改回 true 即可 -->
       <el-button
+        v-if="showDevPlatformEntry"
         :type="activeTab === 'dev' ? 'danger' : 'info'"
         @click="activeTab = 'dev'"
         >🚀 快速开发新平台</el-button
@@ -35,11 +37,6 @@
     <div v-if="activeTab === 'docs'">
       <el-card class="section-card" shadow="never">
         <div slot="header" class="card-header"><span>隐私设置</span></div>
-        <p class="section-tip">
-          匿名启动统计会将启动时间、版本、操作系统、CPU 架构、语言和 GUI/CLI
-          启动方式发送到公开 GitHub Gist。统计事件不包含账号、Cookie、视频和发布记录；
-          GitHub 仍可看到网络请求来源 IP。
-        </p>
         <el-switch :value="telemetryEnabled" :disabled="telemetryBusy || telemetryEnforced || !telemetryLoaded"
           active-text="允许匿名启动统计" inactive-text="关闭匿名启动统计"
           @change="saveTelemetryPreference" />
@@ -364,6 +361,8 @@ export default {
     return {
       appVersion: packageInfo.version,
       httpPort: 30088,
+      // 项目详情页「快速开发新平台」入口总开关
+      showDevPlatformEntry: false,
       activeTab: ["docs", "dev", "ai"].includes(this.$route && this.$route.query.tab)
         ? this.$route.query.tab
         : "docs",

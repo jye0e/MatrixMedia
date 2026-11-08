@@ -23,7 +23,7 @@
     <div class="platform-card">
       <div class="card-head">
         <span class="card-title">平台数据分布</span>
-        <span class="card-tip">番茄视频、掘金不参与统计</span>
+        <span class="card-tip">番茄视频、掘金、朋友圈不参与统计</span>
       </div>
       <platform-bar-chart v-if="platformRows.length" :rows="platformRows" />
       <div v-else class="card-empty">暂无数据，点击右上角「同步全部数据」</div>

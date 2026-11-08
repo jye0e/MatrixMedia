@@ -147,6 +147,10 @@ dist
 # Python
 __pycache__/
 *.py[cod]
+# 朋友圈脚本随包运行时（PyInstaller 构建产物，由 npm run build:moments-runtime 生成）
+/resources/moments-runtime/
+# 朋友圈脚本运行期产物（日志/截图/草稿暂存）
+/resources/moments/logs/
 
 # 平台调试凭据与接口快照（scripts/test-*-stats.js 生成，含登录态，禁止提交）
 .mm-*

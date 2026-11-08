@@ -5,6 +5,7 @@ import path from "path";
 import { normalizeCreativeStatement } from "../../shared/creativeStatement.js";
 import ptConfig from "../config/ptConfig";
 import { runPuppeteerTask } from "./puppeteerFile";
+import { publishMoments } from "./upLoad/pyq.js";
 import { changeData } from "../server/utils";
 import { createScheduledRecord } from "./scheduledPublish";
 import { findExistingScheduled } from "./scheduledDedupe.js";
@@ -445,6 +446,54 @@ async function runSingleFilePublishInner(
       },
     };
 
+    // 朋友圈没有 Web 后台，走本机微信 PC 客户端桌面自动化脚本，不打开浏览器窗口。
+    // 这是唯一不经过 runPuppeteerTask 的平台分支；其它平台行为保持不变。
+    if (v.platform === "朋友圈") {
+      if (effectivePublishMode.publishToDraft) {
+        const message =
+          "朋友圈不支持保存草稿（桌面脚本只有「彩排不发表」模式），请关闭该账号的默认草稿设置";
+        updateRecord("failed", message);
+        finish({ exitCode: 3, status: "failed", message, id: recordId });
+        return;
+      }
+      const pyqOptions = (v.publishOptions && v.publishOptions.pyq) || {};
+      const images = Array.isArray(pyqOptions.images)
+        ? pyqOptions.images
+        : coverPath
+          ? [coverPath]
+          : [];
+      publishMoments({
+        title: metadata.title,
+        description: metadata.description,
+        tags: metadata.tags,
+        text: pyqOptions.text,
+        images,
+        logDir: pyqOptions.logDir,
+        templatesDir: pyqOptions.templatesDir,
+        threshold: pyqOptions.threshold,
+      }).then((r) => {
+        // 复用现有发布回执通道，记录状态 / 退出码语义保持一致
+        transport.reply("puppeteerFile-done", {
+          taskId,
+          status: r.exitCode === 0,
+          message: r.message,
+          publishMode: "publish",
+          outcome: r.exitCode === 0 ? "published" : "failed",
+          momentsLogPath: r.logPath,
+          momentsOutput: r.stdoutTail,
+        });
+      });
+      if (!waitForResult) {
+        resolve({
+          exitCode: 0,
+          status: "submitted",
+          message: "已提交朋友圈发布任务",
+          id: recordId,
+        });
+      }
+      return;
+    }
+
     runPuppeteerTask(taskPayload, transport, () => {});
     if (!waitForResult) {
       resolve({
@@ -458,11 +507,9 @@ async function runSingleFilePublishInner(
 }
 
 function sortPublishPlatforms(list) {
-  return [...list].sort((a, b) => {
-    if (a.platform.includes("视频号")) return -1;
-    if (b.platform.includes("视频号")) return 1;
-    return 0;
-  });
+  const order = (p) =>
+    p.platform.includes("视频号") ? 0 : p.platform === "朋友圈" ? 1 : 2;
+  return [...list].sort((a, b) => order(a) - order(b));
 }
 
 /**

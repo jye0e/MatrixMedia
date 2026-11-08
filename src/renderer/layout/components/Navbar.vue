@@ -352,14 +352,14 @@ export default {
   z-index: 1002;
   height: $shellHeaderHeight;
   border-bottom: 1px solid $borderColor;
-  background-color: #ffffff;
+  background-color: $menuBg;
   flex-shrink: 0;
 
   .top-right {
     display: flex;
     width: 100%;
     height: 100%;
-    background-color: #ffffff;
+    background-color: $menuBg;
     justify-content: space-between;
     align-items: center;
     padding-right: 20px;

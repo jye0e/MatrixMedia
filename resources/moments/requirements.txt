@@ -1,0 +1,19 @@
+# 微信朋友圈自动化脚本依赖（Windows）
+# 安装： pip install -r requirements.txt
+
+pyautogui>=0.9.54        # 模拟鼠标点击 / 键盘输入 / Ctrl+V
+pygetwindow>=0.0.9       # 按窗口标题查找窗口（可选，主脚本用 pywin32）
+pywin32>=306             # 窗口枚举 / 激活 / 窗口矩形（Windows 必需）
+pyperclip>=1.8.2         # 剪贴板（粘贴中文文字与图片路径）
+mss>=9.0.1               # 快速屏幕截图
+numpy>=1.20              # 图像数组运算（灰度/差分/拉普拉斯统计全部用 numpy）
+Pillow>=9.0              # 图像读写（截图编码 + 模板采集工具的 Tk 显示）
+
+# 可选：仅 --debug-templates / 模板对照与 capture_template.py 需要
+# 运行时定位全部走 DIP 常量，不装 OpenCV 也能完整跑完发表流程；
+# 随包自带的 exe 运行时（scripts/build-moments-runtime.js）已排除 OpenCV 以减小体积。
+# opencv-python>=4.4
+
+# 可选：发表后 OCR 校验（不装也能跑，脚本会自动降级跳过 OCR 判据）
+# 注意：还需要另外安装 Tesseract 引擎与 chi_sim 语言包，见 README
+pytesseract>=0.3.10      # 调用本机 tesseract 做中文 OCR

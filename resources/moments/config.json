@@ -1,0 +1,241 @@
+{
+  "windows": {
+    "main": { "title_regex": "^(微信|WeChat)$" },
+    "file_dialog": { "title_regex": "(打开|Open|选择文件)" }
+  },
+  "templates": {
+    "dir": "templates",
+    "threshold": 0.80,
+    "scales": [1.0, 0.9, 0.8, 1.1, 1.25, 1.5],
+    "items": {
+      "sidebar_moments": {
+        "file": "wc_sidebar_moments.png",
+        "alt_files": ["wc_sidebar_moments_active.png"],
+        "roi": [0.0, 0.0, 0.10, 1.0],
+        "threshold": 0.85,
+        "desc": "主窗口左侧导航栏的“朋友圈”图标（灰色罗盘 / 激活绿色对勾）"
+      },
+      "discover_moments": {
+        "file": "wc_discover_moments.png",
+        "alt_files": ["wc_discover_moments_active.png"],
+        "roi": [0.0, 0.0, 0.45, 1.0],
+        "threshold": 0.82,
+        "desc": "“发现”浮层里的“朋友圈”一行（灰色/绿色选中两种外观）"
+      },
+      "moments_camera": {
+        "file": "wc_moments_camera.png",
+        "roi": null,
+        "threshold": 0.85,
+        "desc": "朋友圈页面右上角的相机（发表）图标"
+      },
+      "editor_input": {
+        "file": "wc_editor_input.png",
+        "roi": null,
+        "threshold": 0.75,
+        "desc": "编辑面板里的“这一刻的想法...”占位文字"
+      },
+      "editor_add_image": {
+        "file": "wc_editor_add_image.png",
+        "roi": null,
+        "threshold": 0.82,
+        "desc": "编辑面板里继续添加图片的“+”方块"
+      },
+      "editor_visibility": {
+        "file": "wc_editor_visibility.png",
+        "roi": null,
+        "threshold": 0.85,
+        "desc": "编辑面板里的“谁可以看 … 公开”整行（只用于判断编辑面板已出现）"
+      },
+      "editor_publish": {
+        "file": "wc_editor_publish.png",
+        "roi": null,
+        "threshold": 0.85,
+        "desc": "编辑面板里的绿色“发表”按钮"
+      },
+      "editor_cancel": {
+        "file": "wc_editor_cancel.png",
+        "roi": null,
+        "threshold": 0.85,
+        "desc": "编辑面板里的灰色「取消」按钮（清理草稿用）"
+      },
+      "discard_no_keep": {
+        "file": "wc_discard_nokeep.png",
+        "roi": null,
+        "threshold": 0.85,
+        "optional": true,
+        "desc": "“将此次编辑保留？”弹窗里的「不保留」按钮"
+      },
+      "publish_confirm": {
+        "file": "wc_publish_confirm.png",
+        "optional": true,
+        "roi": null,
+        "threshold": 0.85,
+        "desc": "（可选）发表后的二次确认按钮"
+      }
+    }
+  },
+  "anchor": {
+    "measured_env": {
+      "resolution": "1920x1080",
+      "dpi_scale": 1.5,
+      "wechat_version": "4.2.0.13",
+      "theme": "light",
+      "frame": "client-area",
+      "note": "dip 值来自 .dip-probe/result_v4/v6/v7 的模板命中中心实测；客户区与窗口外框的差：左 11 / 右 11 / 上 0 / 下 11（物理像素 @150%）"
+    },
+    "frames": {
+      "client_tl": "客户区左上角",
+      "client_center": "客户区几何中心",
+      "window_right_top": "窗口外框右缘 / 上缘"
+    },
+    "debug_templates": false,
+    "items": {
+      "sidebar_moments": {
+        "frame": "client_tl",
+        "dip": [28.67, 254.67],
+        "size": [28.0, 28.0],
+        "desc": "左侧导航栏「朋友圈」图标（灰色罗盘 / 激活绿色对勾）"
+      },
+      "discover_moments": {
+        "frame": "client_tl",
+        "dip": [110.67, 100.67],
+        "size": [80.0, 30.0],
+        "desc": "“发现”浮层里的「朋友圈」一行"
+      },
+      "moments_camera": {
+        "frame": "window_right_top",
+        "dip": [-85.2, 55.33],
+        "size": [25.3, 18.7],
+        "desc": "朋友圈页面右上角相机（发表）图标"
+      },
+      "editor_visibility": {
+        "frame": "client_center",
+        "dip": [3.6, 135.5],
+        "size": [306.7, 33.3],
+        "desc": "编辑面板“谁可以看 … 公开”整行（单行布局的面板就绪判据）"
+      },
+      "editor_input": {
+        "frame": "client_center",
+        "dip": [-71.7, -195.2],
+        "size": [166.7, 28.0],
+        "variants": { "multi_row": { "dip": [-72.0, -236.7] } },
+        "desc": "编辑面板“这一刻的想法...”输入区"
+      },
+      "editor_add_image": {
+        "frame": "client_center",
+        "dip": [-9.1, -41.2],
+        "size": [86.7, 88.0],
+        "desc": "编辑面板“+”添加图片方块（9 张时该方块消失）"
+      },
+      "editor_publish": {
+        "frame": "client_center",
+        "dip": [-61.1, 193.5],
+        "size": [110.0, 25.3],
+        "variants": { "multi_row": { "dip": [-61.3, 234.0] } },
+        "desc": "编辑面板绿色「发表」按钮（同时用于点击护栏与多行布局就绪判据）"
+      },
+      "editor_cancel": {
+        "frame": "client_center",
+        "dip": [56.3, 192.1],
+        "size": [121.3, 33.3],
+        "variants": { "multi_row": { "dip": [56.0, 232.7] } },
+        "desc": "编辑面板灰色「取消」按钮"
+      },
+      "editor_grid": {
+        "frame": "client_center",
+        "dip": [-101.33, -89.33],
+        "pitch": [100.0, 100.0],
+        "cell": [95.33, 95.33],
+        "desc": "编辑面板图片网格（实测格中心 x=598/748/898、y=358/508/658，格子 143px@150%）"
+      },
+      "discard_no_keep": {
+        "frame": "client_center",
+        "dip": [56.3, 24.8],
+        "size": [108.0, 34.0],
+        "desc": "“将此次编辑保留？”弹窗里的「不保留」按钮"
+      },
+      "file_dialog": {
+        "frame": "client_tl",
+        "dip": [0.0, 0.0],
+        "size": [640.0, 480.0],
+        "origin": "top_left",
+        "desc": "“选择文件”对话框的位置（左上角，相对客户区）与固定尺寸；实测外框与客户区左上角偏差 (0,0)，尺寸 960x720 物理像素"
+      }
+    },
+    "editor_layout": {
+      "multi_row_min_images": 3,
+      "max_images": 9,
+      "grid_cols": 3
+    },
+    "multi_image": {
+      "first_tile_dip": [242.67, 163.33],
+      "enter_folder_settle_sec": 1.3,
+      "max_selected": 9
+    },
+    "verify": {
+      "pixel_tolerance": 25,
+      "poll_interval_sec": 0.35,
+      "resize_settle_sec": 1.5,
+      "discover": { "min_diff": 0.15, "min_mean": 200.0, "max_dark": 0.20, "min_edge": 600.0, "min_green_row": 0.30, "timeout_sec": 5.0 },
+      "moments": { "min_page_diff": 0.05, "min_std": 8.0, "min_dark": 0.01, "settle_timeout_sec": 6.0, "timeout_sec": 20.0 },
+      "editor": { "min_diff": 0.10, "min_mean": 215.0, "min_std": 8.0, "min_dark": 0.002, "max_dark": 0.18, "multi_min_green": 0.50, "timeout_sec": 20.0 },
+      "grid": { "min_content_std": 12.0, "max_content_mean": 228.0, "empty_min_mean": 232.0, "empty_max_std": 11.0 },
+      "panel_closed": { "min_diff": 0.12, "max_feed_diff": 0.30, "timeout_sec": 20.0 },
+      "discard_dialog": { "min_diff": 0.03, "min_dark": 0.02, "timeout_sec": 3.0 }
+    }
+  },
+  "timing": {
+    "countdown_sec": 5,
+    "step_wait_sec": 0.8,
+    "locate_timeout_sec": 8.0,
+    "locate_retry_interval_sec": 0.4,
+    "window_open_timeout_sec": 20.0,
+    "moments_open_retries": 2,
+    "dialog_timeout_sec": 15.0,
+    "dialog_confirm_retries": 3,
+    "editor_open_timeout_sec": 20.0,
+    "total_timeout_sec": 240,
+    "after_publish_wait_sec": 1.5
+  },
+  "content": {
+    "text": "",
+    "text_file": "",
+    "images": []
+  },
+  "publish": {
+    "enabled": true,
+    "click_confirm_if_found": true,
+    "cancel_after_no_publish": true,
+    "verify_editor_closed_sec": 20.0,
+    "feed_verify": {
+      "enabled": true,
+      "roi": [0.30, 0.05, 1.0, 1.0],
+      "diff_threshold": 0.02,
+      "pixel_tolerance": 25,
+      "scroll_to_top": true,
+      "scroll_units": 30,
+      "settle_sec": 1.2,
+      "timeout_sec": 15.0,
+      "ocr": {
+        "enabled": true,
+        "lang": "chi_sim",
+        "min_chars": 6
+      }
+    }
+  },
+  "safety": {
+    "dry_run": false
+  },
+  "schedule": {
+    "at": "",
+    "in": "",
+    "progress_interval_sec": 60,
+    "min_lead_sec": 10
+  },
+  "screen": {
+    "expected_width": 1920,
+    "expected_height": 1080,
+    "expected_dpi_scale": 1.5
+  },
+  "logging": { "dir": "logs" }
+}

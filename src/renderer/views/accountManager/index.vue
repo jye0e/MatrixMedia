@@ -34,6 +34,10 @@
       <p v-if="title === '视频号'" class="section-muted">
         若内置窗口扫码后提示「没有可登录的视频号」，可尝试「使用 Chrome 登录」。鉴权通过后会自动同步到该账号；无需重复添加账号。
       </p>
+      <p v-if="title === '朋友圈'" class="section-muted">
+        朋友圈没有 Web 登录后台：登录态由本机微信 PC 客户端提供，请先在本机登录微信并保持主窗口可用。
+        发布走桌面自动化脚本（仅 Windows 桌面会话），且至少需要一张图片；不支持保存草稿，也不参与数据统计。
+      </p>
     </el-card>
 
     <el-card class="section-card" shadow="never">
@@ -550,6 +554,13 @@ export default {
     },
     async openLoginWindow() {
       if (this.openingChrome) return;
+      // 朋友圈没有 Web 登录页：登录态来自本机微信 PC 客户端，不打开浏览器窗口。
+      if (this.title === "朋友圈") {
+        this.$message.info(
+          "朋友圈无需网页登录：请先在本机登录微信 PC 版并保持主窗口可用，发布时会自动操作微信客户端"
+        );
+        return;
+      }
       if (!this.ptConfig[this.title]) {
         this.$message.error("未找到平台配置：" + this.title);
         return;

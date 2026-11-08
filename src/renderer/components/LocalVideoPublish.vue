@@ -104,6 +104,7 @@
           <p class="bt2-tip">
             选填。设置后抖音 / 快手 / 视频号会使用自定义封面（竖图 3:4
             最佳；视频号仅支持 jpg/png），不选则由平台自动截取视频帧。
+            朋友圈只发图片+文案，会优先使用此封面图；未选封面则该账号无法发布。
           </p>
         </el-form-item>
         <el-form-item label="定时发布">
@@ -695,6 +696,14 @@ function formatBqFromTags(tags) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** 平台展示排序：视频号 0，朋友圈 1，其余 2（同权重保持原顺序） */
+function ptDisplayOrder(pt) {
+  const name = String(pt || "");
+  if (name.includes("视频号")) return 0;
+  if (name === "朋友圈") return 1;
+  return 2;
 }
 
 export default {
@@ -1920,11 +1929,8 @@ export default {
       let draftSubmitted = 0;
       let scheduledSubmitted = 0;
 
-      platforms.sort((a, b) => {
-        if (a.pt.includes("视频号")) return -1;
-        if (b.pt.includes("视频号")) return 1;
-        return 0;
-      });
+      // 视频号排最前，朋友圈紧随其后（其余平台保持原顺序）
+      platforms.sort((a, b) => ptDisplayOrder(a.pt) - ptDisplayOrder(b.pt));
 
       const scheduledWriteTasks = [];
       for (let p of platforms) {
@@ -2387,11 +2393,8 @@ export default {
           return shortTitle;
         })();
 
-        platforms.sort((a, b) => {
-          if (a.pt.includes("视频号")) return -1;
-          if (b.pt.includes("视频号")) return 1;
-          return 0;
-        });
+        // 视频号排最前，朋友圈紧随其后（其余平台保持原顺序）
+        platforms.sort((a, b) => ptDisplayOrder(a.pt) - ptDisplayOrder(b.pt));
 
         for (const p of platforms) {
           const partition = buildAccountPartitionOf(p, p.pt);

@@ -18,6 +18,14 @@ export default {
     useragent: "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Safari/537.36 MicroMessenger/7.0.20.1781(0x6700143B) NetType/WIFI MiniProgramEnv/Windows WindowsWechat/WMPF",
     listIndex: "https://channels.weixin.qq.com/platform/post/list",
   },
+  朋友圈: {
+    // 朋友圈无 Web 后台：登录/发布均依赖本机微信 PC 客户端，index 仅占位。
+    index: "about:blank",
+    upload: "",
+    useragent: "",
+    listIndex: "",
+    note: "桌面自动化：需 Windows + 微信 PC 版，且至少一张图片",
+  },
   哔哩哔哩: {
     index: "https://member.bilibili.com/platform/home",
     upload: "https://member.bilibili.com/platform/upload/video/frame/",

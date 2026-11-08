@@ -18,26 +18,33 @@
           <el-button type="success" @click="openArticlePublish"
             >发布文章</el-button
           >
+          <el-button type="success" plain @click="openMomentsPublish"
+            >发表朋友圈</el-button
+          >
         </div>
         <div class="toolbar-right">
           <el-button plain :loading="exportingHistory" @click="exportHistory"
             >导出当前记录</el-button
           >
-          <span class="toolbar-label">帮助</span>
-          <el-button type="warning" plain @click="openFeatureWall"
-            >问题与新需求</el-button
-          >
-          <el-button type="warning" plain @click="openQQGroup"
-            >加入作者QQ群</el-button
-          >
-          <el-button type="danger" plain @click="openGitHubStar"
-            >⭐ GitHub Star</el-button
-          >
+          <!-- 帮助入口组：如需恢复，把 data 里的 showHelpEntries 改回 true 即可 -->
+          <template v-if="showHelpEntries">
+            <span class="toolbar-label">帮助</span>
+            <el-button type="warning" plain @click="openFeatureWall"
+              >问题与新需求</el-button
+            >
+            <el-button type="warning" plain @click="openQQGroup"
+              >加入作者QQ群</el-button
+            >
+            <el-button type="danger" plain @click="openGitHubStar"
+              >⭐ GitHub Star</el-button
+            >
+          </template>
         </div>
       </div>
     </div>
 
     <LocalVideoPublish ref="localPublishRef" @published="loadRecords" />
+    <MomentsPublish ref="momentsPublishRef" />
     <LocalArticlePublish ref="articlePublishRef" @published="loadRecords" />
 
     <div class="info-box">
@@ -197,6 +204,7 @@ import copyToClipboard from "@/utils/copy";
 import ptConfig from "@/utils/configUrl";
 import openLoginWindow from "@/utils/openLoginWindow";
 import LocalVideoPublish from "@/components/LocalVideoPublish.vue";
+import MomentsPublish from "@/components/MomentsPublish.vue";
 import LocalArticlePublish from "@/components/LocalArticlePublish.vue";
 import { normalizeVideoRecordMetadata } from "../../../shared/videoMetadata.js";
 import {
@@ -210,6 +218,7 @@ export default {
   name: "VideoManager",
   components: {
     LocalVideoPublish,
+    MomentsPublish,
     LocalArticlePublish,
   },
   data() {
@@ -219,6 +228,8 @@ export default {
       ptConfig,
       dataList: {},
       exportingHistory: false,
+      // 帮助入口组总开关（问题与新需求 / 加入作者QQ群 / GitHub Star）
+      showHelpEntries: false,
       taskHandlers: new Map(),
       statusLoadingMap: {},
       loginData: {},
@@ -483,6 +494,10 @@ export default {
     },
     canRepublish(row) {
       return row && (row.textType === "local" || row.textType === "article");
+    },
+    /** 顶部「发表朋友圈」入口：打开独立的图片+文字表单，不经过账号/平台选择 */
+    openMomentsPublish() {
+      if (this.$refs.momentsPublishRef) this.$refs.momentsPublishRef.open();
     },
     async handleRepublish(row) {
       const details = (row && row.showAlltype) || [];

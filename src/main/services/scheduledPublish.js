@@ -5,6 +5,7 @@ import path from "path";
 import { ipcMain } from "electron";
 import ptConfig from "../config/ptConfig";
 import { runPuppeteerTask } from "./puppeteerFile";
+import { publishMoments } from "./upLoad/pyq.js";
 import { changeData } from "../server/utils";
 import { normalizeCreativeStatement } from "../../shared/creativeStatement.js";
 import { isRemotePublishFile, resolvePublishFile } from "./resolvePublishFile";
@@ -244,7 +245,8 @@ async function executeScheduledRecordAsync(record) {
   let cleanupDownload = null;
   let publishFilePath = record.filePath;
 
-  if (record.textType !== "article") {
+  // 朋友圈定时只发图片/视频 + 文案，素材由 publishOptions.pyq 携带，跳过记录级视频存在性校验
+  if (record.textType !== "article" && record.pt !== "朋友圈") {
     if (!publishFilePath) {
       updateRecord(record, {
         publishStatus: "failed",
@@ -333,6 +335,45 @@ async function executeScheduledRecordAsync(record) {
           }
         },
       };
+      // 朋友圈同样不走浏览器：到期后直接调用本机微信 PC 桌面脚本
+      if (taskPayload.pt === "朋友圈") {
+        if (taskPayload.publishToDraft) {
+          transport.reply("puppeteerFile-done", {
+            taskId,
+            status: false,
+            message:
+              "朋友圈不支持保存草稿（桌面脚本只有「彩排不发表」模式），请关闭该账号的默认草稿设置",
+          });
+          return;
+        }
+        const pyqOptions = (taskPayload.publishOptions && taskPayload.publishOptions.pyq) || {};
+        const images = Array.isArray(pyqOptions.images)
+          ? pyqOptions.images
+          : taskPayload.data.coverPath
+            ? [taskPayload.data.coverPath]
+            : [];
+        publishMoments({
+          title: taskPayload.data.title,
+          description: taskPayload.data.description,
+          tags: taskPayload.data.tags,
+          text: pyqOptions.text,
+          images,
+          video: pyqOptions.video,
+          logDir: pyqOptions.logDir,
+          templatesDir: pyqOptions.templatesDir,
+          threshold: pyqOptions.threshold,
+        }).then((r) => {
+          transport.reply("puppeteerFile-done", {
+            taskId,
+            status: r.exitCode === 0,
+            message: r.message,
+            publishMode: "publish",
+            outcome: r.exitCode === 0 ? "published" : "failed",
+            momentsLogPath: r.logPath,
+          });
+        });
+        return;
+      }
       runPuppeteerTask(taskPayload, transport, () => {});
     });
   } finally {

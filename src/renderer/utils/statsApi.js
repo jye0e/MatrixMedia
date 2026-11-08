@@ -8,7 +8,7 @@ import {
 } from "../../shared/accountIdentity.js";
 
 /** 不参与统计的平台（无数据接口） */
-const STATS_EXCLUDED = new Set(["番茄视频", "掘金"]);
+const STATS_EXCLUDED = new Set(["番茄视频", "掘金", "朋友圈"]);
 
 /**
  * 从 localStorage 账号树组装可采集账号列表。

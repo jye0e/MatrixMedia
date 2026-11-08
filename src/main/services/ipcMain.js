@@ -23,6 +23,7 @@ import { SERVER_REQUEST_TOKEN } from "../server/requestGuard";
 import { isInternalAppUrl } from "../../shared/navigationGuard";
 import { registerTelemetryPreferenceIpc } from "./telemetryPreferenceIpc.js";
 import { registerAiContentIpc } from "./aiContentIpc.js";
+import { registerMomentsIpc } from "./momentsIpc.js";
 import { createAiKeyStore } from "./aiKeyStore.js";
 import { registerDataStatsIpc } from "./dataStats/index.js";
 import { runSphChromeLogin } from "./cliLogin/sphChromeLogin.js";
@@ -71,6 +72,9 @@ export default {
         safeStorage,
       }),
     });
+
+    // 朋友圈独立发布表单：选图 -> 调本机微信桌面脚本
+    registerMomentsIpc(ipcMain);
 
     // 检查更新：只做「是否有新版本」的检测并返回版本信息，
     // 不再自动开始下载 —— 是否下载由用户点击「立即更新」后
