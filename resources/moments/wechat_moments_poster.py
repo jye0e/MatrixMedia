@@ -62,6 +62,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import hashlib
 import json
 import logging
 import os
@@ -158,6 +159,32 @@ def save_png(path: str, bgr: np.ndarray) -> None:
     from PIL import Image
     rgb = bgr[:, :, ::-1] if bgr.ndim == 3 else bgr
     Image.fromarray(np.ascontiguousarray(rgb)).save(path)
+
+
+def file_sha256(path: str) -> str:
+    """整文件 SHA-256（图片通常几百 KB，直接读完即可）。"""
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def describe_image(path: str) -> str:
+    """
+    把“实际使用的图片”写成日志里能一眼核对的形式：
+    绝对路径 + 像素尺寸 + 字节数 + SHA-256 前 16 位。
+    出问题时可以直接拿日志里的哈希与源文件比对，确认脚本用的到底是不是用户选的那张。
+    """
+    try:
+        size = os.path.getsize(path)
+        from PIL import Image
+        with Image.open(path) as im:
+            dims = "%dx%d" % im.size
+        digest = file_sha256(path)[:16]
+    except Exception as exc:  # 读不出来也要留下路径，方便排查
+        return "%s（无法读取：%s）" % (path, exc)
+    return "%s（%s，%d 字节，sha256=%s…）" % (path, dims, size, digest)
 
 
 if getattr(sys, "frozen", False):
@@ -645,6 +672,80 @@ class WindowInfo:
     hwnd: int
     title: str
     rect: Tuple[int, int, int, int]
+    pid: int = 0
+
+
+def window_pid(hwnd: int) -> int:
+    """窗口所属进程 PID（用来确认对话框确实是微信弹的，而不是别的程序）。"""
+    try:
+        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+        return int(pid)
+    except Exception:
+        return 0
+
+
+def window_class(hwnd: int) -> str:
+    try:
+        return win32gui.GetClassName(hwnd)
+    except Exception:
+        return ""
+
+
+def read_control_text(hwnd: int) -> str:
+    """
+    跨进程读取控件文本。
+
+    注意：win32gui.GetWindowText 对**其它进程**的控件不生效——它不会为该控件
+    发送 WM_GETTEXT，而是直接返回空串（对顶层窗口标题才可靠）。微信的文件
+    对话框属于另一个进程，因此必须用 SendMessage(WM_GETTEXTLENGTH /
+    WM_GETTEXT)，系统会替我们完成跨进程编组。
+    """
+    try:
+        length = int(win32gui.SendMessage(hwnd, win32con.WM_GETTEXTLENGTH, 0, 0))
+    except Exception:
+        length = 0
+    if length > 0:
+        try:
+            buf = ctypes.create_unicode_buffer(length + 1)
+            win32gui.SendMessage(hwnd, win32con.WM_GETTEXT, length + 1, buf)
+            text = (buf.value or "").strip()
+            if text:
+                return text
+        except Exception:
+            pass
+    # 同进程 / 顶层窗口标题场景的兜底
+    try:
+        return win32gui.GetWindowText(hwnd).strip()
+    except Exception:
+        return ""
+
+
+def read_dialog_filename_text(hwnd: int) -> str:
+    """
+    读取文件对话框“文件名”输入框里的实际文本（用于确认粘贴真的进了文件名框）。
+
+    Windows 通用对话框的文件名框是 ComboBox（内含 Edit 子控件）；这里用
+    EnumChildWindows 找 Edit/ComboBox 并取文本，只读不写，不影响交互。
+    文本读取走 read_control_text（SendMessage 跨进程），不再依赖 GetWindowText。
+    """
+    texts: List[Tuple[str, str]] = []
+
+    def _cb(child, _):
+        cls = window_class(child)
+        if cls in ("Edit", "ComboBox", "ComboBoxEx32"):
+            text = read_control_text(child)
+            if text:
+                texts.append((cls, text))
+        return True
+
+    try:
+        win32gui.EnumChildWindows(hwnd, _cb, None)
+    except Exception:
+        return ""
+    for cls, text in texts:
+        if cls == "Edit" and text:
+            return text
+    return texts[0][1] if texts else ""
 
 
 def list_visible_windows() -> List[WindowInfo]:
@@ -667,18 +768,25 @@ def list_visible_windows() -> List[WindowInfo]:
         left, top, right, bottom = rect
         if right - left < 50 or bottom - top < 50:
             return True
-        windows.append(WindowInfo(hwnd, title, rect))
+        windows.append(WindowInfo(hwnd, title, rect, window_pid(hwnd)))
         return True
 
     win32gui.EnumWindows(_cb, None)
     return windows
 
 
-def find_window(pattern: str, exclude_hwnd: Optional[int] = None) -> Optional[WindowInfo]:
-    """按标题正则匹配，返回面积最大的窗口。"""
+def find_window(pattern: str, exclude_hwnd: Optional[int] = None,
+                pid: Optional[int] = None) -> Optional[WindowInfo]:
+    """
+    按标题正则匹配，返回面积最大的窗口。
+
+    pid 不为空时只匹配该进程的窗口：避免把别的程序弹的同名“选择文件”
+    对话框误当成微信的（历史上就是在这个位置上“卡住”的）。
+    """
     regex = re.compile(pattern)
     candidates = [w for w in list_visible_windows()
-                  if regex.search(w.title) and w.hwnd != exclude_hwnd]
+                  if regex.search(w.title) and w.hwnd != exclude_hwnd
+                  and (pid is None or w.pid == pid)]
     if not candidates:
         return None
     candidates.sort(key=lambda w: (w.rect[2] - w.rect[0]) * (w.rect[3] - w.rect[1]))
@@ -1575,6 +1683,14 @@ class MomentsPoster:
                       window.hwnd, window.title, window.rect,
                       window.rect[2] - window.rect[0], window.rect[3] - window.rect[1],
                       self.wechat_pid)
+        # 先关闭“上一次失败/人工操作”残留的微信“选择文件”对话框：
+        # 它是模态窗口，会把主窗口前置、点击、粘贴全部挡住，用户看到的就是
+        # “卡在选择文件”。必须在任何前置/点击之前处理。
+        try:
+            self.close_stale_file_dialog()
+        except StepError:
+            self.screenshot("fail_stale_dialog")
+            raise
         if not activate_window(window.hwnd):
             self.screenshot("fail_foreground")
             raise StepError(EXIT_WINDOW_NOT_FOUND, "main_window",
@@ -1679,6 +1795,21 @@ class MomentsPoster:
             ok = s["green"] >= float(cfg.get("multi_min_green", 0.50))
             return ok, (f"「发表」按钮绿色占比={s['green']:.3f} mean={s['mean']:.1f} "
                         f"std={s['std']:.1f}（多行布局判据）")
+
+        # 无论哪种布局，编辑面板都必须有绿色「发表」按钮。
+        # 旧逻辑在 single_row 下只看“判据区域有内容”，信息流里的照片同样满足，
+        # 于是把“文件对话框正在弹出”误判成“已进入编辑面板”，
+        # 后续点击/粘贴全部落错位置，最终还会误报发表成功（19:41 的事故）。
+        try:
+            btn = self._patch_stats(self._grab_patch(self._anchor_box("editor_publish")))
+            btn_green = btn["green"]
+        except StepError as exc:
+            return False, f"取「发表」按钮失败：{exc.message}"
+        if btn_green < float(cfg.get("multi_min_green", 0.50)):
+            return False, (f"「发表」按钮绿色占比={btn_green:.3f} < "
+                           f"{float(cfg.get('multi_min_green', 0.50)):.2f}"
+                           f"（无绿色发表按钮，判定不是编辑面板）；区域 "
+                           f"mean={s['mean']:.1f} std={s['std']:.1f}")
         ok = (s["mean"] >= float(cfg.get("min_mean", 150))
               and s["std"] >= float(cfg.get("min_std", 5))
               and float(cfg.get("min_dark", 0.002)) <= s["dark"] <= float(cfg.get("max_dark", 0.55)))
@@ -1730,6 +1861,25 @@ class MomentsPoster:
         cfg = self._verify_cfg()["panel_closed"]
         if self.panel_fingerprint is None:
             return False, "缺少面板指纹，无法判断"
+
+        # 强判据 A：屏幕上还有“选择文件”对话框 → 根本没有经过编辑面板，发表不可能生效。
+        # 19:41 的误报正是“对话框开着、脚本却认为面板已关闭”导致的。
+        dialog = find_window(self.cfg["windows"]["file_dialog"]["title_regex"],
+                             pid=self.main_window.pid if self.main_window else None)
+        if dialog:
+            return False, (f"仍有文件对话框（hwnd={dialog.hwnd} pid={dialog.pid} "
+                           f"标题={dialog.title}），发表未生效")
+
+        # 强判据 B：绿色「发表」按钮必须消失（编辑面板真正关闭的强特征）。
+        try:
+            btn_green = self._patch_stats(
+                self._grab_patch(self._anchor_box("editor_publish")))["green"]
+        except StepError as exc:
+            return False, f"取「发表」按钮失败：{exc.message}"
+        min_green = float(self._verify_cfg()["editor"].get("multi_min_green", 0.50))
+        if btn_green >= min_green:
+            return False, f"「发表」按钮仍在（green={btn_green:.3f}），编辑面板未关闭"
+
         probe_name = self._editor_probe_name()
         try:
             patch = self._grab_patch(self._anchor_box(probe_name))
@@ -1869,6 +2019,36 @@ class MomentsPoster:
         raise StepError(EXIT_LOCATE_FAILED, "open_moments",
                         "多次点击「朋友圈」后页面仍未就绪，请检查微信/网络状态")
 
+    def close_stale_file_dialog(self) -> None:
+        """
+        关闭上一次失败运行残留的“选择文件”对话框。
+
+        为什么必须先关：残留对话框是模态的，点相机会被它挡住；旧逻辑会
+        `find_window` 到这个旧窗口并继续往里粘贴路径，看起来“卡在选择文件”，
+        实际整条流程都作用在一个来路不明的对话框上。
+        """
+        pattern = self.cfg["windows"]["file_dialog"]["title_regex"]
+        pid = self.main_window.pid if self.main_window else None
+        stale = find_window(pattern, pid=pid)
+        if not stale:
+            return
+        self.log.warning("检测到残留的“选择文件”对话框（标题=%s hwnd=%s），先关闭",
+                         stale.title, stale.hwnd)
+        try:
+            activate_window(stale.hwnd, retries=2)
+        except Exception as exc:
+            self.log.warning("激活残留对话框失败：%s", exc)
+        for attempt in range(1, 4):
+            time.sleep(0.3)
+            pyautogui.press("esc")
+            time.sleep(0.8)
+            if not find_window(pattern):
+                self.log.info("残留“选择文件”对话框已关闭（第 %d 次 Esc）", attempt)
+                return
+        raise StepError(EXIT_DIALOG_FAILED, "open_editor",
+                        "残留的“选择文件”对话框无法关闭（可能被其他 dialog 占用）；"
+                        "已停止，未做任何选图/发表操作")
+
     def step_open_publish_editor(self):
         """
         点击相机进入发表流程：
@@ -1876,9 +2056,26 @@ class MomentsPoster:
           - 若先出现“选择文件”对话框（本机 4.2 实测）：必须有图片，选第一张
         """
         self.check_timeout("open_editor")
+        # 关键修复 1：上次失败的运行可能把“选择文件”对话框留在屏幕上。此时点相机
+        # 不会弹新对话框，旧逻辑会把残留对话框当成自己的继续粘贴，行为不可控。
+        self.close_stale_file_dialog()
         # 关键：点相机之前先留存“发表前信息流首屏”基准图（之后界面就被盖住了）
         self.capture_feed_baseline()
         self._refresh_geometry()
+
+        # 关键修复：上一次运行/人工操作可能把编辑面板（草稿）留在屏幕上。此时点相机
+        # 不会弹出“选择文件”，而会“看起来直接进入编辑面板”；旧逻辑会直接复用它，
+        # 于是发布出去的是面板里的旧图/旧文案，而不是本次 --image 指定的图片。
+        # 这里先显式丢弃遗留草稿，保证本次一定从“选文件”重新开始。
+        if self._editor_present()[0]:
+            self.log.warning("检测到屏幕上有遗留的编辑面板（草稿）：先「取消→不保留」清空，"
+                             "不复用旧图/旧文案")
+            try:
+                self.cancel_draft()
+            except StepError as err:
+                raise StepError(EXIT_DIALOG_FAILED, "open_editor",
+                                "清理遗留编辑面板失败，未继续执行：%s" % err.message)
+
         cx, cy = self._anchor_point("moments_camera")
         self._debug_compare("moments_camera", (cx, cy))
         self._click_xy(cx, cy, "朋友圈相机（发表）图标")
@@ -1891,13 +2088,19 @@ class MomentsPoster:
         dialog = None
         while time.time() < deadline:
             self.check_timeout("open_editor")
-            dialog = find_window(dialog_pattern)
+            dialog = find_window(dialog_pattern,
+                                 pid=self.main_window.pid if self.main_window else None)
             if dialog:
                 break
             if self._editor_present()[0]:
-                self.log.info("效果验证通过：相机点击后直接进入编辑面板")
-                self._wait_editor_ready(1.0)
-                return
+                # 遗留草稿已在点相机前清理；这里若仍“直接进入编辑面板”，说明本次没有
+                # 经过“选择文件”，无法确认面板里的图片就是本次 --image 指定的图片。
+                # 宁可停下，也不发布来路不明的内容（历史上就是这样发错图的）。
+                self.screenshot("fail_editor_without_dialog")
+                raise StepError(EXIT_DIALOG_FAILED, "open_editor",
+                                "点击相机后未经“选择文件”就直接出现编辑面板，"
+                                "无法确认面板中的图片是本次指定的图片（疑似仍有遗留草稿）；"
+                                "已停止，未输入文字也未发表")
             time.sleep(0.3)
 
         if dialog is None:
@@ -1906,8 +2109,17 @@ class MomentsPoster:
                             "点击相机后既没有出现编辑面板，也没有出现文件选择对话框"
                             "（效果验证未通过），已停止")
 
-        # 验证通过：文件对话框确实出现（按窗口标题确认），并记录与常量的偏差
-        self.log.info("效果验证通过：文件对话框已出现，标题=%s", dialog.title)
+        # 必须确认这个对话框属于微信进程：否则可能是别的程序（或本客户端自己的选图框），
+        # 在它上面粘贴/回车既不会导入图片，也不会关闭，用户看到的就是“卡在选择文件”。
+        if self.main_window and dialog.pid and dialog.pid != self.main_window.pid:
+            self.screenshot("fail_dialog_foreign")
+            raise StepError(EXIT_DIALOG_FAILED, "open_editor",
+                            "出现的“选择文件”对话框不属于微信进程"
+                            "（hwnd=%s pid=%s，微信 pid=%s），已停止，未粘贴未回车"
+                            % (dialog.hwnd, dialog.pid, self.main_window.pid))
+        # 验证通过：文件对话框确实出现（按窗口标题 + 进程确认），并记录与常量的偏差
+        self.log.info("效果验证通过：文件对话框已出现，标题=%s hwnd=%s pid=%s class=%s",
+                      dialog.title, dialog.hwnd, dialog.pid, window_class(dialog.hwnd))
         self._log_dialog_deviation(dialog)
 
         # 本机 4.2.0.13 实测路径：先选图片，选完才出现编辑面板
@@ -1961,6 +2173,14 @@ class MomentsPoster:
             return
         self.check_timeout("input_text")
         self._refresh_geometry()
+        # 点文字区之前复核：编辑面板必须真的在（有绿色发表按钮），否则点击会落进
+        # 信息流或文件对话框，粘贴内容也进不到编辑面板。
+        ok, detail = self._editor_present()
+        if not ok:
+            self.screenshot("fail_input_no_editor")
+            raise StepError(EXIT_LOCATE_FAILED, "input_text",
+                            "输入文字前复核失败：屏幕上没有编辑面板（%s）；"
+                            "已停止，未点击未粘贴" % detail)
         ix, iy = self._anchor_point("editor_input")
         self._debug_compare("editor_input", (ix, iy))
         self._click_xy(ix, iy, "文字输入区")
@@ -2019,6 +2239,9 @@ class MomentsPoster:
         """
         pattern = self.cfg["windows"]["file_dialog"]["title_regex"]
         attempts = int(self.timing.get("dialog_confirm_retries", 3))
+        if not os.path.isabs(image_path):
+            raise StepError(EXIT_CONFIG, "content",
+                            "图片路径不是绝对路径，已停止：%s" % image_path)
         for attempt in range(1, attempts + 1):
             self.check_timeout("file_dialog")
             self.log.info("文件对话框（第 %d/%d 次尝试）：标题=%s hwnd=%s",
@@ -2031,6 +2254,24 @@ class MomentsPoster:
             time.sleep(0.1)
             self.paste(image_path, f"第 {index} 张图片路径")
             time.sleep(0.5)
+            # 验证粘贴真的进了“文件名”框：否则后续 Enter 不会导入任何图片，
+            # 对话框会一直开着（用户看到的就是“卡在选择文件”）。
+            typed = read_dialog_filename_text(dialog.hwnd)
+            self.log.info("文件名框内容（粘贴后）=%s", typed or "<空>")
+            if not typed:
+                self.log.warning("文件名框为空：Alt+N 未聚焦到文件名框（第 %d/%d 次），重试",
+                                 attempt, attempts)
+                continue
+            # 判据收紧：优先要求与绝对路径完全一致；至少 basename 一致
+            if not (
+                os.path.normcase(os.path.normpath(typed))
+                == os.path.normcase(os.path.normpath(image_path))
+                or os.path.normcase(os.path.basename(typed))
+                == os.path.normcase(os.path.basename(image_path))
+            ):
+                self.log.warning("文件名框内容与目标不一致（期望 %s，实际 %s，第 %d/%d 次），重试",
+                                 image_path, typed, attempt, attempts)
+                continue
             if self._pre_enter_patch is None or index <= 2:
                 # 回车前留存判据区域（之后要证明这里真的变成了编辑面板）
                 self._pre_enter_patch = self._editor_probe_patch()
@@ -2045,9 +2286,10 @@ class MomentsPoster:
                         "文件对话框未关闭，可能路径无效或对话框焦点异常")
 
     def _wait_dialog_closed(self, pattern: str, timeout: float) -> bool:
+        pid = self.main_window.pid if self.main_window else None
         deadline = time.time() + timeout
         while time.time() < deadline:
-            if not find_window(pattern):
+            if not find_window(pattern, pid=pid):
                 return True
             time.sleep(0.3)
         return False
@@ -2064,7 +2306,15 @@ class MomentsPoster:
         os.makedirs(staging, exist_ok=True)
         for index, src in enumerate(self.content.images, start=1):
             ext = os.path.splitext(src)[1].lower() or ".jpg"
-            shutil.copyfile(src, os.path.join(staging, "%02d%s" % (index, ext)))
+            dst = os.path.join(staging, "%02d%s" % (index, ext))
+            shutil.copyfile(src, dst)
+            src_digest = file_sha256(src)
+            dst_digest = file_sha256(dst)
+            if src_digest != dst_digest:
+                raise StepError(EXIT_CONFIG, "content",
+                                "复制到 staging 后内容不一致：%s -> %s" % (src, dst))
+            self.log.info("  staging %02d：%s -> %s（sha256=%s…）",
+                          index, src, dst, src_digest[:16])
         self._staging_dir = staging
         self.log.info("多图 staging 目录：%s（%d 张，按 01..%02d 命名保证顺序）",
                       staging, len(self.content.images), len(self.content.images))
@@ -2096,6 +2346,13 @@ class MomentsPoster:
             time.sleep(0.1)
             self.paste('"' + folder + '"', "staging 文件夹路径")
             time.sleep(0.5)
+            typed = read_dialog_filename_text(dialog.hwnd)
+            self.log.info("文件名框内容（粘贴文件夹后）=%s", typed or "<空>")
+            expect = os.path.basename(folder)
+            if not typed or os.path.normcase(expect) not in os.path.normcase(typed):
+                self.log.warning("文件名框未包含 %s：粘贴没有进到文件名框"
+                                 "（第 %d/%d 次），重试", expect, attempt, attempts)
+                continue
             pyautogui.press("enter")           # 进入文件夹
             time.sleep(settle)
 
@@ -2172,6 +2429,92 @@ class MomentsPoster:
         else:
             details.append("共 %d 张，已满格，无“+”方块（客户端上限生效）" % count)
         return ok_all, "；".join(details)
+
+    def abort_and_cleanup(self, reason: str) -> None:
+        """
+        失败收尾：不让微信停在半截状态。
+
+        旧版本任何一步失败都直接抛 StepError 退出，微信里会留下：
+          - 一个“选择文件”对话框（用户看到的就是“卡在选择文件”）；
+          - 或一个带旧图的编辑面板（下次运行被当成“直接进入编辑面板”复用）。
+        这里尽量两步都清掉，且每一步失败只记日志、不掩盖原始错误码。
+        """
+        self.log.warning("失败收尾（%s）：开始清理微信残留界面", reason)
+        pattern = self.cfg["windows"]["file_dialog"]["title_regex"]
+        pid = self.main_window.pid if self.main_window else None
+        try:
+            for attempt in range(1, 3):
+                stale = find_window(pattern, pid=pid)
+                if not stale:
+                    break
+                self.log.info("失败收尾：关闭文件对话框 hwnd=%s（第 %d 次，Esc）",
+                              stale.hwnd, attempt)
+                activate_window(stale.hwnd, retries=2)
+                time.sleep(0.3)
+                pyautogui.press("esc")
+                time.sleep(0.8)
+            stale = find_window(pattern, pid=pid)
+            if stale:
+                method = self._force_close_file_dialog(stale)
+                if method:
+                    self.log.info("失败收尾：Esc 未关闭，改用 %s 关闭 hwnd=%s",
+                                  method, stale.hwnd)
+            if find_window(pattern, pid=pid):
+                self.log.error("失败收尾：文件对话框仍未关闭，请人工关闭后再重试")
+            else:
+                self.log.info("失败收尾：文件对话框已关闭")
+        except Exception as exc:
+            self.log.error("失败收尾：关闭文件对话框异常：%s", exc)
+
+        try:
+            if self._editor_present()[0]:
+                self.log.info("失败收尾：检测到编辑面板，执行「取消→不保留」丢弃草稿")
+                self.cancel_draft()
+                self.log.info("失败收尾：草稿已丢弃")
+            else:
+                self.log.info("失败收尾：未发现编辑面板，无需丢弃草稿")
+        except Exception as exc:
+            self.log.error("失败收尾：丢弃草稿失败（微信里可能残留草稿，请人工取消）：%s", exc)
+
+    def _force_close_file_dialog(self, stale) -> str:
+        """
+        Esc 关不掉残留文件对话框时的兜底（Windows 通用对话框）：
+          1) 直接给对话框发 WM_COMMAND(IDCANCEL)，等价于点“取消”，不需要前台焦点；
+          2) 仍不行则枚举「取消」按钮并发 BM_CLICK。
+        返回生效方式名；都失败返回空串。只记日志，不掩盖原始错误码。
+        """
+        pattern = self.cfg["windows"]["file_dialog"]["title_regex"]
+        pid = self.main_window.pid if self.main_window else None
+        try:
+            win32gui.PostMessage(stale.hwnd, win32con.WM_COMMAND, win32con.IDCANCEL, 0)
+            time.sleep(0.7)
+            if not find_window(pattern, pid=pid):
+                return "WM_COMMAND(IDCANCEL)"
+            self.log.info("失败收尾：WM_COMMAND(IDCANCEL) 未生效，尝试点击「取消」按钮")
+        except Exception as exc:
+            self.log.warning("失败收尾：WM_COMMAND(IDCANCEL) 异常：%s", exc)
+
+        targets: List[int] = []
+
+        def _cb(child, _):
+            if window_class(child) == "Button" and read_control_text(child) == "取消":
+                targets.append(child)
+                return False
+            return True
+
+        try:
+            win32gui.EnumChildWindows(stale.hwnd, _cb, None)
+        except Exception:
+            pass
+        if targets:
+            try:
+                win32gui.SendMessage(targets[0], win32con.BM_CLICK, 0, 0)
+                time.sleep(0.7)
+                if not find_window(pattern, pid=pid):
+                    return "「取消」按钮 BM_CLICK"
+            except Exception as exc:
+                self.log.warning("失败收尾：点击「取消」异常：%s", exc)
+        return ""
 
     def cancel_draft(self):
         """
@@ -2252,6 +2595,15 @@ class MomentsPoster:
             if self.cfg["publish"].get("cancel_after_no_publish", True):
                 self.cancel_draft()
             raise DryRunStop("已停在「发表」按钮前（--no-publish）；草稿已清理")
+
+        # 点发表前复核：必须真的在编辑面板里（有绿色发表按钮），否则这次点击会落在
+        # 信息流上；随后“面板关闭 + 首屏像素差”还会误判成功（19:41 的误报就是这样产生的）。
+        ok, detail = self._editor_present()
+        if not ok:
+            self.screenshot("fail_publish_no_editor")
+            raise StepError(EXIT_PUBLISH_VERIFY_FAILED, "publish",
+                            "点击发表前复核失败：屏幕上没有编辑面板（%s）；"
+                            "已停止，未点击发表" % detail)
 
         self._click_xy(px, py, "绿色「发表」按钮", allow_publish=True)
         if self.dry_run:
@@ -2440,7 +2792,13 @@ class MomentsPoster:
                       else "不参与定位（缺失也不影响流程）")
         self.log.info("文字：%s", (self.content.text[:60] + "...")
                       if len(self.content.text) > 60 else self.content.text)
-        self.log.info("图片：%s", self.content.images)
+        if self.content.images:
+            self.log.info("实际使用图片（%d 张，来自 --image / 配置）：",
+                          len(self.content.images))
+            for index, path in enumerate(self.content.images, start=1):
+                self.log.info("  图 %d：%s", index, describe_image(path))
+        else:
+            self.log.info("图片：未提供")
 
     def cleanup(self):
         self.grabber.close()
@@ -2552,6 +2910,10 @@ def main() -> int:
                 poster.screenshot(f"error_{err.step}")
             except Exception:
                 pass
+            try:
+                poster.abort_and_cleanup(err.step)
+            except Exception:
+                pass
         return err.code
     except KeyboardInterrupt:
         bootstrap.warning("用户按 Ctrl+C 中止")
@@ -2561,6 +2923,10 @@ def main() -> int:
         if poster:
             try:
                 poster.screenshot("error_unexpected")
+            except Exception:
+                pass
+            try:
+                poster.abort_and_cleanup("unexpected")
             except Exception:
                 pass
         return EXIT_UNEXPECTED

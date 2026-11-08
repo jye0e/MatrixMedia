@@ -69,6 +69,25 @@ export function registerMomentsIpc(ipcMain) {
       : [];
     const video = String((payload && payload.video) || "");
     const text = String((payload && payload.text) || "");
-    return await publishMoments({ images, video, text });
+    // 主进程日志可核对：UI 提交了什么、脚本收到什么、最终退出码是多少
+    console.log(
+      `[moments] 收到发表请求：图片=${images.length} 张，视频=${
+        video ? "1 个" : "无"
+      }，正文=${text.length} 字`
+    );
+    images.forEach((p, i) => {
+      console.log(`[moments] 图 ${i + 1}：${p}`);
+    });
+    if (video) console.log(`[moments] 视频：${video}`);
+    const result = await publishMoments({ images, video, text });
+    console.log(
+      `[moments] 脚本退出码=${result && result.exitCode} 状态=${
+        result && result.status
+      } 日志目录=${(result && result.logPath) || ""}`
+    );
+    if (result && result.stdoutTail) {
+      console.log(`[moments] 脚本输出尾部：\n${result.stdoutTail}`);
+    }
+    return result;
   });
 }

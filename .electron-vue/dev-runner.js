@@ -172,7 +172,9 @@ function startElectron() {
 
   const childEnv = { ...process.env }
   delete childEnv.ELECTRON_RUN_AS_NODE
-  electronProcess = spawn(electron, args, { env: childEnv })
+  // stdio[0] 用 inherit：本机非交互式终端里 stdin 被管道接管时 Electron 的
+  // crashpad 处理器会启动失败并以 crashpad_client_win.cc "not connected" 退出。
+  electronProcess = spawn(electron, args, { env: childEnv, stdio: ['inherit', 'pipe', 'pipe'] })
 
   electronProcess.stdout.on('data', data => {
     electronLog(removeJunk(data), 'blue')
